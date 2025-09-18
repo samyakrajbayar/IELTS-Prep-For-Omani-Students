@@ -1,0 +1,24 @@
+# Core requirements
+openai==0.28.0
+requests==2.31.0
+python-dotenv==1.0.0
+
+# Discord Bot requirements
+discord.py==2.3.2
+aiohttp==3.8.5
+
+# Streamlit App requirements
+streamlit==1.28.1
+plotly==5.17.0
+pandas==2.1.3
+numpy==1.24.3
+
+# Additional utilities
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Optional: For enhanced translation (if you get Google Translate API)
+googletrans==4.0.0rc1
+
+# Optional: For database storage (upgrade from in-memory)
+sqlite3

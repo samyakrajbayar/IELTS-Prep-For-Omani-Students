@@ -1,0 +1,206 @@
+# docker-compose.yml for easy local development
+version: '3.8'
+
+services:
+  ielts-tutor:
+    build: .
+    ports:
+      - "5000:5000"
+      - "8080:8080"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - GOOGLE_TRANSLATE_API_KEY=${GOOGLE_TRANSLATE_API_KEY}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+---
+
+# railway.toml for Railway deployment
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python main.py"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[variables]
+PYTHON_VERSION = "3.9"
+PORT = "5000"
+
+---
+
+# vercel.json for Vercel deployment (Streamlit only)
+{
+  "builds": [
+    {
+      "src": "streamlit_app.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "streamlit_app.py"
+    }
+  ],
+  "env": {
+    "OPENAI_API_KEY": "@openai-api-key",
+    "GOOGLE_TRANSLATE_API_KEY": "@google-translate-api-key"
+  }
+}
+
+---
+
+# render.yaml for Render deployment
+services:
+  - type: web
+    name: ielts-streamlit-app
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "streamlit run streamlit_app.py --server.port=$PORT --server.address=0.0.0.0"
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_TRANSLATE_API_KEY
+        sync: false
+  
+  - type: worker
+    name: ielts-discord-bot
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python discord_bot.py"
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: GOOGLE_TRANSLATE_API_KEY
+        sync: false
+
+---
+
+# fly.toml for Fly.io deployment
+app = "ielts-ai-tutor"
+kill_signal = "SIGINT"
+kill_timeout = 5
+processes = []
+
+[build]
+  builder = "paketobuildpacks/builder:base"
+
+[env]
+  PORT = "5000"
+  PYTHON_VERSION = "3.9"
+
+[experimental]
+  auto_rollback = true
+
+[[services]]
+  http_checks = []
+  internal_port = 5000
+  processes = ["app"]
+  protocol = "tcp"
+  script_checks = []
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
+    type = "connections"
+
+  [[services.ports]]
+    force_https = true
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.tcp_checks]]
+    grace_period = "1s"
+    interval = "15s"
+    restart_limit = 0
+    timeout = "2s"
+
+---
+
+# Procfile for Heroku deployment
+web: python main.py
+worker: python discord_bot.py
+release: echo "IELTS AI Tutor deployed successfully"
+
+---
+
+# app.yaml for Google Cloud App Engine
+runtime: python39
+
+env_variables:
+  OPENAI_API_KEY: "your-openai-api-key"
+  DISCORD_BOT_TOKEN: "your-discord-bot-token"
+  GOOGLE_TRANSLATE_API_KEY: "your-google-translate-api-key"
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.6
+
+handlers:
+- url: /.*
+  script: auto
+
+---
+
+# netlify.toml for Netlify Functions (Streamlit only)
+[build]
+  command = "pip install -r requirements.txt"
+  publish = "dist"
+
+[build.environment]
+  PYTHON_VERSION = "3.9"
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/streamlit_app"
+  status = 200
+
+---
+
+# GitHub Actions workflow for CI/CD
+# .github/workflows/deploy.yml
+name: Deploy IELTS AI Tutor
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Test imports
+      run: |
+        python -c "import ielts_core; print('Core module imported successfully')"
+    
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - name: Deploy to production
+      run: echo "Deploy to your preferred platform here"
